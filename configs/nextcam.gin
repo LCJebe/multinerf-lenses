@@ -1,7 +1,7 @@
 Config.dataset_loader = 'nextcam'
 Config.near = 0.
 Config.far = 1.
-Config.factor = 8  # Factor 8 means (240 * 180)
+Config.factor = 4  # Factor 8 means (240 * 180), Factor 4 means (480 x 360)
 Config.forward_facing = True
 Config.adam_eps = 1e-8
 
@@ -9,7 +9,8 @@ Config.adam_eps = 1e-8
 Config.batch_size = 8192
 
 # Evaluate on every 4th image.
-Config.llffhold = 4
+Config.llffhold = 6
+Config.llff_use_all_images_for_training = False
 
 # Render and save more often.
 Config.train_render_every = 2000

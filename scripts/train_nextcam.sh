@@ -2,10 +2,10 @@
 
 export CUDA_VISIBLE_DEVICES=0
 
-SCENE=portrait_flower
+SCENE=grand_piano
 EXPERIMENT=nextcam
-DATA_DIR=/home/jebe/multinerf/data
-CHECKPOINT_DIR=/home/jebe/multinerf/results/"$EXPERIMENT"/"$SCENE"
+DATA_DIR=/home/jebe/multinerf-lenses/data
+CHECKPOINT_DIR=/home/jebe/multinerf-lenses/results/"$EXPERIMENT"/"$SCENE"
 
 rm "$CHECKPOINT_DIR"/*
 python -m train \

@@ -956,10 +956,15 @@ class NextCamBundle(Dataset):
 
     # Define test / train split.
     all_indices = np.arange(len(images))
+    if config.llff_use_all_images_for_training:
+      train_indices = all_indices
+    else:
+      train_indices = all_indices[all_indices % config.llffhold != 0]
     split_indices = {
         utils.DataSplit.TEST: all_indices[all_indices % config.llffhold == 0],
-        utils.DataSplit.TRAIN: all_indices,
+        utils.DataSplit.TRAIN: train_indices,
     }
+
     indices = split_indices[self.split]
 
     self.pixtocams = np.stack(pixtocams)[indices]
