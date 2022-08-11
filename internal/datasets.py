@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Different datasets implementation plus a general port for all the datasets."""
 
 import abc
@@ -20,23 +19,24 @@ import json
 import os
 from os import path
 import queue
+# This is ugly, but it works.
+import sys
 import threading
 from typing import Mapping, Optional, Sequence, Text, Tuple, Union
 
 import cv2
+import jax
+import numpy as np
+from PIL import Image
+
 from internal import camera_utils
 from internal import configs
 from internal import image as lib_image
 from internal import raw_utils
 from internal import utils
-import jax
-import numpy as np
-from PIL import Image
 
-# This is ugly, but it works.
-import sys
-sys.path.insert(0,'internal/pycolmap')
-sys.path.insert(0,'internal/pycolmap/pycolmap')
+sys.path.insert(0, 'internal/pycolmap')
+sys.path.insert(0, 'internal/pycolmap/pycolmap')
 import pycolmap
 
 
@@ -48,6 +48,7 @@ def load_dataset(split, train_dir, config):
       'tat_nerfpp': TanksAndTemplesNerfPP,
       'tat_fvs': TanksAndTemplesFVS,
       'dtu': DTU,
+      'nextcam': NextCamBundle,
   }
   return dataset_dict[config.dataset_loader](split, train_dir, config)
 
@@ -243,10 +244,7 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
     width: int, width of images.
   """
 
-  def __init__(self,
-               split: str,
-               data_dir: str,
-               config: configs.Config):
+  def __init__(self, split: str, data_dir: str, config: configs.Config):
     super().__init__()
 
     # Initialize attributes
@@ -315,9 +313,7 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
 
     self._n_examples = self.camtoworlds.shape[0]
 
-    self.cameras = (self.pixtocams,
-                    self.camtoworlds,
-                    self.distortion_params,
+    self.cameras = (self.pixtocams, self.camtoworlds, self.distortion_params,
                     self.pixtocam_ndc)
 
     # Seed the queue with one batch to avoid race condition.
@@ -387,8 +383,7 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
                       pix_x_int: np.ndarray,
                       pix_y_int: np.ndarray,
                       cam_idx: Union[np.ndarray, np.int32],
-                      lossmult: Optional[np.ndarray] = None
-                      ) -> utils.Batch:
+                      lossmult: Optional[np.ndarray] = None) -> utils.Batch:
     """Creates ray data batch from pixel coordinates and camera indices.
 
     All arguments must have broadcastable shapes. If the arguments together
@@ -433,8 +428,10 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
       rays = pixels
     else:
       # Slow path, do ray computation using numpy (on CPU).
-      rays = camera_utils.cast_ray_batch(
-          self.cameras, pixels, self.camtype, xnp=np)
+      rays = camera_utils.cast_ray_batch(self.cameras,
+                                         pixels,
+                                         self.camtype,
+                                         xnp=np)
 
     # Create data batch.
     batch = {}
@@ -453,7 +450,7 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
     # We assume all images in the dataset are the same resolution, so we can use
     # the same width/height for sampling all pixels coordinates in the batch.
     # Batch/patch sampling parameters.
-    num_patches = self._batch_size // self._patch_size ** 2
+    num_patches = self._batch_size // self._patch_size**2
     lower_border = self._num_border_pixels_to_mask
     upper_border = self._num_border_pixels_to_mask + self._patch_size - 1
     # Random pixel patch x-coordinates.
@@ -480,15 +477,21 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
     else:
       lossmult = None
 
-    return self._make_ray_batch(pix_x_int, pix_y_int, cam_idx,
+    return self._make_ray_batch(pix_x_int,
+                                pix_y_int,
+                                cam_idx,
                                 lossmult=lossmult)
 
   def generate_ray_batch(self, cam_idx: int) -> utils.Batch:
     """Generate ray batch for a specified camera in the dataset."""
     if self._render_spherical:
       camtoworld = self.camtoworlds[cam_idx]
-      rays = camera_utils.cast_spherical_rays(
-          camtoworld, self.height, self.width, self.near, self.far, xnp=np)
+      rays = camera_utils.cast_spherical_rays(camtoworld,
+                                              self.height,
+                                              self.width,
+                                              self.near,
+                                              self.far,
+                                              xnp=np)
       return utils.Batch(rays=rays)
     else:
       # Generate rays for all pixels in the image.
@@ -605,10 +608,7 @@ class LLFF(Dataset):
     if config.rawnerf_mode:
       # Load raw images and metadata.
       images, metadata, raw_testscene = raw_utils.load_raw_dataset(
-          self.split,
-          self.data_dir,
-          image_names,
-          config.exposure_percentile,
+          self.split, self.data_dir, image_names, config.exposure_percentile,
           factor)
       self.metadata = metadata
 
@@ -624,8 +624,9 @@ class LLFF(Dataset):
       colmap_files = sorted(utils.listdir(colmap_image_dir))
       image_files = sorted(utils.listdir(image_dir))
       colmap_to_image = dict(zip(colmap_files, image_files))
-      image_paths = [os.path.join(image_dir, colmap_to_image[f])
-                     for f in image_names]
+      image_paths = [
+          os.path.join(image_dir, colmap_to_image[f]) for f in image_names
+      ]
       images = [utils.load_img(x) for x in image_paths]
       images = np.stack(images, axis=0) / 255.
 
@@ -909,3 +910,59 @@ class DTU(Dataset):
     self.height, self.width = images.shape[1:3]
     self.camtoworlds = camtoworlds[indices]
     self.pixtocams = pixtocams[indices]
+
+
+class NextCamBundle(Dataset):
+  """NextCam Bundle Dataset."""
+
+  def _load_renderings(self, config):
+    """Load images from disk."""
+
+    bundle = np.load(self.data_dir, allow_pickle=True)
+    num_frames = bundle["num_frames"]
+
+    # Extract poses, intrinsics, images.
+    images = []
+    camtoworlds = []
+    pixtocams = []
+    for i in range(num_frames):
+      # Poses.
+      w2c = bundle[f"info_{i}"].item()["world_to_camera"]
+      camtoworlds.append(np.linalg.inv(w2c))
+
+      # Intrinsics.
+      # Swap x and y of principal point values in K.
+      K_local = bundle[f"info_{i}"].item()["intrinsics"]
+      camera_mat = K_local.copy()
+      camera_mat[0, 2] = K_local[1, 2]
+      camera_mat[1, 2] = K_local[0, 2]
+
+      if config.factor > 0:
+        # Scale camera matrix according to downsampling factor.
+        camera_mat = np.diag([1. / config.factor, 1. / config.factor, 1.
+                             ]).astype(np.float32) @ camera_mat
+
+      pixtocams.append(np.linalg.inv(camera_mat))
+
+      # Images.
+      image = (bundle[f"img_{i}"] / 255.).astype(np.float32)
+      if config.factor > 1:
+        image = lib_image.downsample(image, config.factor)
+      images.append(image)
+
+    # Normalize poses.
+    camtoworlds = np.stack(camtoworlds)
+    camtoworlds, _ = camera_utils.transform_poses_pca(camtoworlds)
+
+    # Define test / train split.
+    all_indices = np.arange(len(images))
+    split_indices = {
+        utils.DataSplit.TEST: all_indices[all_indices % config.llffhold == 0],
+        utils.DataSplit.TRAIN: all_indices,
+    }
+    indices = split_indices[self.split]
+
+    self.pixtocams = np.stack(pixtocams)[indices]
+    self.images = np.stack(images)[indices]
+    self.camtoworlds = camtoworlds[indices]
+    self.height, self.width = self.images.shape[1:3]

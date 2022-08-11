@@ -1,0 +1,39 @@
+Config.dataset_loader = 'nextcam'
+Config.near = 0.
+Config.far = 1.
+Config.factor = 8  # Factor 8 means (240 * 180)
+Config.forward_facing = True
+Config.adam_eps = 1e-8
+
+# Reduce batch size to fit memory.
+Config.batch_size = 8192
+
+# Evaluate on every 4th image.
+Config.llffhold = 4
+
+# Render and save more often.
+Config.train_render_every = 2000
+Config.checkpoint_every = 10000
+Config.max_steps = 100000
+
+Model.ray_shape = 'cylinder'
+Model.opaque_background = True
+Model.num_levels = 2
+Model.num_prop_samples = 128
+Model.num_nerf_samples = 32
+
+PropMLP.net_depth = 4
+PropMLP.net_width = 256
+PropMLP.basis_shape = 'octahedron'
+PropMLP.basis_subdivisions = 1
+PropMLP.disable_density_normals = True
+PropMLP.disable_rgb = True
+
+NerfMLP.net_depth = 8
+NerfMLP.net_width = 256
+NerfMLP.basis_shape = 'octahedron'
+NerfMLP.basis_subdivisions = 1
+NerfMLP.disable_density_normals = True
+
+NerfMLP.max_deg_point = 16
+PropMLP.max_deg_point = 16
