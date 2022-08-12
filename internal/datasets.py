@@ -35,6 +35,8 @@ from internal import image as lib_image
 from internal import raw_utils
 from internal import utils
 
+import skimage
+
 sys.path.insert(0, 'internal/pycolmap')
 sys.path.insert(0, 'internal/pycolmap/pycolmap')
 import pycolmap
@@ -925,6 +927,8 @@ class NextCamBundle(Dataset):
     images = []
     camtoworlds = []
     pixtocams = []
+    depths = []
+    confidences = []
     for i in range(num_frames):
       # Poses.
       w2c = bundle[f"info_{i}"].item()["world_to_camera"]
@@ -950,24 +954,54 @@ class NextCamBundle(Dataset):
         image = lib_image.downsample(image, config.factor)
       images.append(image)
 
+      depth = bundle[f"depth_{i}"]
+      depth = skimage.transform.resize(depth, image.shape[:2])
+      depths.append(depth)
+      conf = bundle[f"conf_{i}"]
+      conf = skimage.transform.resize(
+          conf,
+          image.shape[:2],
+      )
+      confidences.append(conf)
+
     # Normalize poses.
     camtoworlds = np.stack(camtoworlds)
-    camtoworlds, _ = camera_utils.transform_poses_pca(camtoworlds)
+    camtoworlds, transform = camera_utils.transform_poses_pca(camtoworlds)
+
+    # Align first camera with world, then rotate 180 around  x to match llff.
+    # R = np.linalg.inv(camtoworlds[0, :3, :3])
+    # tf = np.eye(4)
+    # tf[:3, :3] = R
+    # new_c2ws = []
+    # for i in range(num_frames):
+    #   c2w = np.eye(4)
+    #   c2w[:3, :] = camtoworlds[i, :3, :]
+    #   new_c2w = tf @ c2w
+    #   # Also rotate 180 around x to match llff
+    #   new_c2w = np.diag([1, -1, -1, 1]) @ new_c2w
+    #   new_c2ws.append(new_c2w)
+    # camtoworlds = np.stack(new_c2ws)
 
     # Define test / train split.
     all_indices = np.arange(len(images))
     if config.llff_use_all_images_for_training:
       train_indices = all_indices
     else:
-      train_indices = all_indices[all_indices % config.llffhold != 0]
+      train_indices = all_indices[(all_indices + 1) % config.llffhold != 0]
     split_indices = {
-        utils.DataSplit.TEST: all_indices[all_indices % config.llffhold == 0],
-        utils.DataSplit.TRAIN: train_indices,
+        utils.DataSplit.TEST:
+            all_indices[(all_indices + 1) % config.llffhold == 0],
+        utils.DataSplit.TRAIN:
+            train_indices,
     }
-
     indices = split_indices[self.split]
 
     self.pixtocams = np.stack(pixtocams)[indices]
     self.images = np.stack(images)[indices]
     self.camtoworlds = camtoworlds[indices]
     self.height, self.width = self.images.shape[1:3]
+
+    # Debug
+    self.depths = np.stack(depths)[indices]
+    self.confidences = np.stack(confidences)[indices]
+    self.debug_transform = transform

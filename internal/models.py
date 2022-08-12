@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """NeRF and its MLPs, with helper functions for construction and rendering."""
 
 import functools
@@ -114,11 +113,10 @@ class Model(nn.Module):
       max_num_exposures = self.num_glo_embeddings
       # Initialize the learned scaling offsets at 0.
       init_fn = jax.nn.initializers.zeros
-      exposure_scaling_offsets = nn.Embed(
-          max_num_exposures,
-          features=3,
-          embedding_init=init_fn,
-          name='exposure_scaling_offsets')
+      exposure_scaling_offsets = nn.Embed(max_num_exposures,
+                                          features=3,
+                                          embedding_init=init_fn,
+                                          name='exposure_scaling_offsets')
 
     # Define the mapping from normalized to metric ray distance.
     _, s_to_t = coord.construct_ray_warps(self.raydist_fn, rays.near, rays.far)
@@ -161,12 +159,12 @@ class Model(nn.Module):
       # overestimates, which can reduce aliasing.
       use_dilation = self.dilation_bias > 0 or self.dilation_multiplier > 0
       if i_level > 0 and use_dilation:
-        sdist, weights = stepfun.max_dilate_weights(
-            sdist,
-            weights,
-            dilation,
-            domain=(init_s_near, init_s_far),
-            renormalize=True)
+        sdist, weights = stepfun.max_dilate_weights(sdist,
+                                                    weights,
+                                                    dilation,
+                                                    domain=(init_s_near,
+                                                            init_s_far),
+                                                    renormalize=True)
         sdist = sdist[..., 1:-1]
         weights = weights[..., 1:-1]
 
@@ -204,13 +202,12 @@ class Model(nn.Module):
       tdist = s_to_t(sdist)
 
       # Cast our rays, by turning our distance intervals into Gaussians.
-      gaussians = render.cast_rays(
-          tdist,
-          rays.origins,
-          rays.directions,
-          rays.radii,
-          self.ray_shape,
-          diag=False)
+      gaussians = render.cast_rays(tdist,
+                                   rays.origins,
+                                   rays.directions,
+                                   rays.radii,
+                                   self.ray_shape,
+                                   diag=False)
 
       if self.disable_integration:
         # Setting the covariance of our Gaussian samples to 0 disables the
@@ -247,11 +244,10 @@ class Model(nn.Module):
       else:
         # Sample RGB values from the range for each ray.
         key, rng = random_split(rng)
-        bg_rgbs = random.uniform(
-            key,
-            shape=weights.shape[:-1] + (3,),
-            minval=self.bg_intensity_range[0],
-            maxval=self.bg_intensity_range[1])
+        bg_rgbs = random.uniform(key,
+                                 shape=weights.shape[:-1] + (3,),
+                                 minval=self.bg_intensity_range[0],
+                                 maxval=self.bg_intensity_range[1])
 
       # RawNeRF exposure logic.
       if rays.exposure_idx is not None:
@@ -286,8 +282,8 @@ class Model(nn.Module):
         # treated as bags of rays, rather than image chunks.
         n = self.config.vis_num_rays
         rendering['ray_sdist'] = sdist.reshape([-1, sdist.shape[-1]])[:n, :]
-        rendering['ray_weights'] = (
-            weights.reshape([-1, weights.shape[-1]])[:n, :])
+        rendering['ray_weights'] = (weights.reshape([-1,
+                                                     weights.shape[-1]])[:n, :])
         rgb = ray_results['rgb']
         rendering['ray_rgbs'] = (rgb.reshape((-1,) + rgb.shape[-2:]))[:n, :, :]
 
@@ -394,8 +390,10 @@ class MLP(nn.Module):
     else:
 
       def dir_enc_fn(direction, _):
-        return coord.pos_enc(
-            direction, min_deg=0, max_deg=self.deg_view, append_identity=True)
+        return coord.pos_enc(direction,
+                             min_deg=0,
+                             max_deg=self.deg_view,
+                             append_identity=True)
 
       self.dir_enc_fn = dir_enc_fn
 
@@ -433,8 +431,9 @@ class MLP(nn.Module):
       roughness: jnp.ndarray(float32), with a shape of [..., 1], or None.
     """
 
-    dense_layer = functools.partial(
-        nn.Dense, kernel_init=getattr(jax.nn.initializers, self.weight_init)())
+    dense_layer = functools.partial(nn.Dense,
+                                    kernel_init=getattr(jax.nn.initializers,
+                                                        self.weight_init)())
 
     density_key, rng = random_split(rng)
 
@@ -445,8 +444,8 @@ class MLP(nn.Module):
       if self.warp_fn is not None:
         means, covs = coord.track_linearize(self.warp_fn, means, covs)
 
-      lifted_means, lifted_vars = (
-          coord.lift_and_diagonalize(means, covs, self.pos_basis_t))
+      lifted_means, lifted_vars = (coord.lift_and_diagonalize(
+          means, covs, self.pos_basis_t))
       x = coord.integrated_pos_enc(lifted_means, lifted_vars,
                                    self.min_deg_point, self.max_deg_point)
 
@@ -475,10 +474,12 @@ class MLP(nn.Module):
       covs_flat = covs.reshape((-1,) + covs.shape[len(means.shape) - 1:])
 
       # Evaluate the network and its gradient on the flattened input.
-      predict_density_and_grad_fn = jax.vmap(
-          jax.value_and_grad(predict_density, has_aux=True), in_axes=(0, 0))
-      (raw_density_flat, x_flat), raw_grad_density_flat = (
-          predict_density_and_grad_fn(means_flat, covs_flat))
+      predict_density_and_grad_fn = jax.vmap(jax.value_and_grad(predict_density,
+                                                                has_aux=True),
+                                             in_axes=(0, 0))
+      (raw_density_flat,
+       x_flat), raw_grad_density_flat = (predict_density_and_grad_fn(
+           means_flat, covs_flat))
 
       # Unflatten the output.
       raw_density = raw_density_flat.reshape(means.shape[:-1])
@@ -519,8 +520,8 @@ class MLP(nn.Module):
 
         if self.enable_pred_roughness:
           raw_roughness = dense_layer(1)(x)
-          roughness = (
-              self.roughness_activation(raw_roughness + self.roughness_bias))
+          roughness = (self.roughness_activation(raw_roughness +
+                                                 self.roughness_bias))
 
         # Output of the first part of MLP.
         if self.bottleneck_width > 0:
@@ -558,8 +559,9 @@ class MLP(nn.Module):
 
         # Append dot product between normal vectors and view directions.
         if self.use_n_dot_v:
-          dotprod = jnp.sum(
-              normals_to_use * viewdirs[..., None, :], axis=-1, keepdims=True)
+          dotprod = jnp.sum(normals_to_use * viewdirs[..., None, :],
+                            axis=-1,
+                            keepdims=True)
           x.append(dotprod)
 
         # Append GLO vector if used.
@@ -595,8 +597,8 @@ class MLP(nn.Module):
           specular_linear = 0.5 * rgb
 
         # Combine specular and diffuse components and tone map to sRGB.
-        rgb = jnp.clip(
-            image.linear_to_srgb(specular_linear + diffuse_linear), 0.0, 1.0)
+        rgb = jnp.clip(image.linear_to_srgb(specular_linear + diffuse_linear),
+                       0.0, 1.0)
 
       # Apply padding, mapping color to [-rgb_padding, 1+rgb_padding].
       rgb = rgb * (1 + 2 * self.rgb_padding) - self.rgb_padding
@@ -654,9 +656,8 @@ def render_image(render_fn: Callable[[jnp.array, utils.Rays],
     # pylint: disable=cell-var-from-loop
     if verbose and i_chunk % max(1, len(idx0s) // 10) == 0:
       print(f'Rendering chunk {i_chunk}/{len(idx0s)-1}')
-    chunk_rays = (
-        jax.tree_util.tree_map(
-            lambda r: r[idx0:idx0 + config.render_chunk_size], rays))
+    chunk_rays = (jax.tree_util.tree_map(
+        lambda r: r[idx0:idx0 + config.render_chunk_size], rays))
     actual_chunk_size = chunk_rays.origins.shape[0]
     rays_remaining = actual_chunk_size % jax.device_count()
     if rays_remaining != 0:
@@ -685,8 +686,8 @@ def render_image(render_fn: Callable[[jnp.array, utils.Rays],
     chunks.append(chunk_rendering)
 
   # Concatenate all chunks within each leaf of a single pytree.
-  rendering = (
-      jax.tree_util.tree_map(lambda *args: jnp.concatenate(args), *chunks))
+  rendering = (jax.tree_util.tree_map(lambda *args: jnp.concatenate(args),
+                                      *chunks))
   for k, z in rendering.items():
     if not k.startswith('ray_'):
       # Reshape 2D buffers into original image shape.

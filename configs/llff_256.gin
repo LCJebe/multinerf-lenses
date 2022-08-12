@@ -1,10 +1,15 @@
 Config.dataset_loader = 'llff'
 Config.near = 0.
 Config.far = 1.
-Config.factor = 8
+Config.factor = 8  # 4
 Config.forward_facing = True
 Config.adam_eps = 1e-8
-Config.batch_size = 8192
+Config.batch_size = 8192  # default: 16k
+
+# Added
+Config.train_render_every = 500
+Config.checkpoint_every = 2000
+Config.max_steps = 10000
 
 Model.ray_shape = 'cylinder'
 Model.opaque_background = True
