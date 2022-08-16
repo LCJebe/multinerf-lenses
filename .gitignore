@@ -9,3 +9,4 @@ __MACOSX/
 data
 results
 .ipynb_checkpoints
+*.ply
