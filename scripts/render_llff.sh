@@ -15,10 +15,10 @@
 
 export CUDA_VISIBLE_DEVICES=0
 
-SCENE=flower
+SCENE=fern
 EXPERIMENT=llff
-DATA_DIR=/usr/local/google/home/barron/tmp/nerf_data/nerf_llff_data
-CHECKPOINT_DIR=/usr/local/google/home/barron/tmp/nerf_results/"$EXPERIMENT"/"$SCENE"
+DATA_DIR=/home/jebe/multinerf-lenses/data
+CHECKPOINT_DIR=/home/jebe/multinerf-lenses/results/"$EXPERIMENT"/"$SCENE"
 
 python -m render \
   --gin_configs=configs/llff_256.gin \

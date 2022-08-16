@@ -648,8 +648,10 @@ class LLFF(Dataset):
       with utils.open_file(posefile, 'rb') as fp:
         poses_arr = np.load(fp)
       bounds = poses_arr[:, -2:]
+
     else:
       bounds = np.array([0.01, 1.])
+
     self.colmap_to_world_transform = np.eye(4)
 
     # Separate out 360 versus forward facing scenes.
@@ -657,7 +659,11 @@ class LLFF(Dataset):
       # Set the projective matrix defining the NDC transformation.
       self.pixtocam_ndc = self.pixtocams.reshape(-1, 3, 3)[0]
       # Rescale according to a default bd factor.
-      scale = 1. / (bounds.min() * .75)
+
+      # Scale based on camera translation extents.
+      scale = 2. / np.max(
+          (np.max(poses[:, :3, 3], axis=0) - np.min(poses[:, :3, 3], axis=0)))
+
       poses[:, :3, 3] *= scale
       self.colmap_to_world_transform = np.diag([scale] * 3 + [1])
       bounds *= scale
@@ -964,23 +970,17 @@ class NextCamBundle(Dataset):
       )
       confidences.append(conf)
 
-    # Normalize poses.
     camtoworlds = np.stack(camtoworlds)
-    camtoworlds, transform = camera_utils.transform_poses_pca(camtoworlds)
 
-    # Align first camera with world, then rotate 180 around  x to match llff.
-    # R = np.linalg.inv(camtoworlds[0, :3, :3])
-    # tf = np.eye(4)
-    # tf[:3, :3] = R
-    # new_c2ws = []
-    # for i in range(num_frames):
-    #   c2w = np.eye(4)
-    #   c2w[:3, :] = camtoworlds[i, :3, :]
-    #   new_c2w = tf @ c2w
-    #   # Also rotate 180 around x to match llff
-    #   new_c2w = np.diag([1, -1, -1, 1]) @ new_c2w
-    #   new_c2ws.append(new_c2w)
-    # camtoworlds = np.stack(new_c2ws)
+    # Normalize poses.
+    scale = 1. / np.max((np.max(camtoworlds[:, :3, 3], axis=0) -
+                         np.min(camtoworlds[:, :3, 3], axis=0)))
+    camtoworlds[:, :3, 3] *= scale
+    # Recenter poses.
+    camtoworlds, transform = camera_utils.recenter_poses(camtoworlds)
+
+    # Set NDC transform (needed for inference).
+    self.pixtocam_ndc = pixtocams[0]
 
     # Define test / train split.
     all_indices = np.arange(len(images))
@@ -996,10 +996,17 @@ class NextCamBundle(Dataset):
     }
     indices = split_indices[self.split]
 
+    # Render spiral path. (Set bounds to [1, 10] heuristically).
+    # We could use the depth information too, but it isn't needed.
+    self.render_poses = camera_utils.generate_spiral_path(
+        camtoworlds, np.array([1, 10]), n_frames=config.render_path_frames)
+
     self.pixtocams = np.stack(pixtocams)[indices]
     self.images = np.stack(images)[indices]
-    self.camtoworlds = camtoworlds[indices]
+    self.camtoworlds = self.render_poses if config.render_path else camtoworlds[
+        indices]
     self.height, self.width = self.images.shape[1:3]
+    self.focal = 1. / self.pixtocams[0, 0, 0]
 
     # Debug
     self.depths = np.stack(depths)[indices]

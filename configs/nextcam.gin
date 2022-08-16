@@ -9,12 +9,12 @@ Config.adam_eps = 1e-8
 Config.batch_size = 8192
 
 # Evaluate on every 4th image.
-Config.llffhold = 5
+#Config.llffhold = 5
 Config.llff_use_all_images_for_training = False
 
 # Render and save more often.
-Config.train_render_every = 2000
-Config.checkpoint_every = 10000
+Config.train_render_every = 500
+Config.checkpoint_every = 2000
 Config.max_steps = 100000
 
 Model.ray_shape = 'cylinder'
