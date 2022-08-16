@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Camera pose and ray generation utility functions."""
 
 import enum
@@ -83,8 +82,8 @@ def convert_to_ndc(origins: _Array,
 
   # Perspective projection into NDC for the t = 0 near points
   #     origins + 0 * directions
-  origins_ndc = xnp.stack([xmult * ox / oz, ymult * oy / oz,
-                           -xnp.ones_like(oz)], axis=-1)
+  origins_ndc = xnp.stack(
+      [xmult * ox / oz, ymult * oy / oz, -xnp.ones_like(oz)], axis=-1)
 
   # Perspective projection into NDC for the t = infinity far points
   #     origins + infinity * directions
@@ -190,10 +189,8 @@ def generate_spiral_path(poses: np.ndarray,
 
 def transform_poses_pca(poses: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
   """Transforms poses so principal components lie on XYZ axes.
-
   Args:
     poses: a (N, 3, 4) array containing the cameras' camera to world transforms.
-
   Returns:
     A tuple (poses, transform), with the transformed poses and the applied
     camera_to_world transforms.
@@ -328,9 +325,7 @@ def generate_interpolated_path(poses: np.ndarray,
   return points_to_poses(new_points)
 
 
-def interpolate_1d(x: np.ndarray,
-                   n_interp: int,
-                   spline_degree: int,
+def interpolate_1d(x: np.ndarray, n_interp: int, spline_degree: int,
                    smoothness: float) -> np.ndarray:
   """Interpolate 1d signal x (by a factor of n_interp times)."""
   t = np.linspace(0, 1, len(x), endpoint=True)
@@ -384,11 +379,10 @@ def create_render_spline_path(
     # Interpolate per-frame exposure value.
     log_exposure = np.log(exposures[spline_indices])
     # Use aggressive smoothing for exposure interpolation to avoid flickering.
-    log_exposure_interp = interpolate_1d(
-        log_exposure,
-        config.render_spline_n_interp,
-        spline_degree=5,
-        smoothness=20)
+    log_exposure_interp = interpolate_1d(log_exposure,
+                                         config.render_spline_n_interp,
+                                         spline_degree=5,
+                                         smoothness=20)
     render_exposures = np.exp(log_exposure_interp)
   else:
     render_exposures = None
@@ -442,7 +436,7 @@ def _compute_residual_and_jacobian(
   #     d(x, y) = 1 + k1 * r(x, y) + k2 * r(x, y) ^2 + k3 * r(x, y)^3 +
   #                   k4 * r(x, y)^4;
   r = x * x + y * y
-  d = 1.0 + r * (k1 + r * (k2 + r * (k3  + r * k4)))
+  d = 1.0 + r * (k1 + r * (k2 + r * (k3 + r * k4)))
 
   # The perfect projection is:
   # xd = x * d(x, y) + 2 * p1 * x * y + p2 * (r(x, y) + 2 * x^2);
@@ -493,8 +487,16 @@ def _radial_and_tangential_undistort(
   y = xnp.copy(yd)
 
   for _ in range(max_iterations):
-    fx, fy, fx_x, fx_y, fy_x, fy_y = _compute_residual_and_jacobian(
-        x=x, y=y, xd=xd, yd=yd, k1=k1, k2=k2, k3=k3, k4=k4, p1=p1, p2=p2)
+    fx, fy, fx_x, fx_y, fy_x, fy_y = _compute_residual_and_jacobian(x=x,
+                                                                    y=y,
+                                                                    xd=xd,
+                                                                    yd=yd,
+                                                                    k1=k1,
+                                                                    k2=k2,
+                                                                    k3=k3,
+                                                                    k4=k4,
+                                                                    p1=p1,
+                                                                    p2=p2)
     denominator = fy_x * fx_y - fx_x * fy_y
     x_numerator = fx * fy_y - fy * fx_y
     y_numerator = fy * fx_x - fx * fy_x
@@ -556,15 +558,18 @@ def pixels_to_rays(
       imageplane will be the xy coordinates of a pixel in that space (so the
       camera ray direction at the origin would be (x, y, -1) in OpenGL coords).
   """
+
   # Must add half pixel offset to shoot rays through pixel centers.
   def pix_to_dir(x, y):
     return xnp.stack([x + .5, y + .5, xnp.ones_like(x)], axis=-1)
+
   # We need the dx and dy rays to calculate ray radii for mip-NeRF cones.
   pixel_dirs_stacked = xnp.stack([
       pix_to_dir(pix_x_int, pix_y_int),
       pix_to_dir(pix_x_int + 1, pix_y_int),
       pix_to_dir(pix_x_int, pix_y_int + 1)
-  ], axis=0)
+  ],
+                                 axis=0)
 
   # For jax, need to specify high-precision matmul.
   matmul = math.matmul if xnp == jnp else xnp.matmul
@@ -575,11 +580,10 @@ def pixels_to_rays(
 
   if distortion_params is not None:
     # Correct for distortion.
-    x, y = _radial_and_tangential_undistort(
-        camera_dirs_stacked[..., 0],
-        camera_dirs_stacked[..., 1],
-        **distortion_params,
-        xnp=xnp)
+    x, y = _radial_and_tangential_undistort(camera_dirs_stacked[..., 0],
+                                            camera_dirs_stacked[..., 1],
+                                            **distortion_params,
+                                            xnp=xnp)
     camera_dirs_stacked = xnp.stack([x, y, xnp.ones_like(x)], -1)
 
   if camtype == ProjectionType.FISHEYE:
@@ -591,7 +595,8 @@ def pixels_to_rays(
         camera_dirs_stacked[..., 0] * sin_theta_over_theta,
         camera_dirs_stacked[..., 1] * sin_theta_over_theta,
         xnp.cos(theta),
-    ], axis=-1)
+    ],
+                                    axis=-1)
 
   # Flip from OpenCV to OpenGL coordinate system.
   camera_dirs_stacked = matmul(camera_dirs_stacked,
@@ -631,11 +636,10 @@ def pixels_to_rays(
   return origins, directions, viewdirs, radii, imageplane
 
 
-def cast_ray_batch(
-    cameras: Tuple[_Array, ...],
-    pixels: utils.Pixels,
-    camtype: ProjectionType = ProjectionType.PERSPECTIVE,
-    xnp: types.ModuleType = np) -> utils.Rays:
+def cast_ray_batch(cameras: Tuple[_Array, ...],
+                   pixels: utils.Pixels,
+                   camtype: ProjectionType = ProjectionType.PERSPECTIVE,
+                   xnp: types.ModuleType = np) -> utils.Rays:
   """Maps from input cameras and Pixel batch to output Ray batch.
 
   `cameras` is a Tuple of four sets of camera parameters.
@@ -688,12 +692,8 @@ def cast_ray_batch(
   )
 
 
-def cast_pinhole_rays(camtoworld: _Array,
-                      height: int,
-                      width: int,
-                      focal: float,
-                      near: float,
-                      far: float,
+def cast_pinhole_rays(camtoworld: _Array, height: int, width: int, focal: float,
+                      near: float, far: float,
                       xnp: types.ModuleType) -> utils.Rays:
   """Wrapper for generating a pinhole camera ray batch (w/o distortion)."""
 
@@ -713,11 +713,8 @@ def cast_pinhole_rays(camtoworld: _Array,
   return utils.Rays(*ray_args, **ray_kwargs)
 
 
-def cast_spherical_rays(camtoworld: _Array,
-                        height: int,
-                        width: int,
-                        near: float,
-                        far: float,
+def cast_spherical_rays(camtoworld: _Array, height: int, width: int,
+                        near: float, far: float,
                         xnp: types.ModuleType) -> utils.Rays:
   """Generates a spherical camera ray batch."""
 

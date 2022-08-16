@@ -2,7 +2,7 @@
 
 export CUDA_VISIBLE_DEVICES=0
 
-SCENE=table
+SCENE=grand_piano
 EXPERIMENT=nextcam
 DATA_DIR=/home/jebe/multinerf-lenses/data
 CHECKPOINT_DIR=/home/jebe/multinerf-lenses/results/"$EXPERIMENT"/"$SCENE"

@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Render script."""
 
 import concurrent.futures
@@ -76,8 +75,9 @@ def create_videos(config, base_dir, out_dir, out_name, num_frames):
       print(f'Images missing for tag {k}')
       continue
     print(f'Making video {video_file}...')
-    with media.VideoWriter(
-        video_file, **video_kwargs, input_format=input_format) as writer:
+    with media.VideoWriter(video_file,
+                           **video_kwargs,
+                           input_format=input_format) as writer:
       for idx in range(num_frames):
         img_file = os.path.join(out_dir, f'{k}_{idx_to_str(idx)}.{file_ext}')
         if not utils.file_exists(img_file):
@@ -131,9 +131,11 @@ def main(unused_argv):
   if config.render_save_async:
     async_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
     async_futures = []
+
     def save_fn(fn, *args, **kwargs):
       async_futures.append(async_executor.submit(fn, *args, **kwargs))
   else:
+
     def save_fn(fn, *args, **kwargs):
       fn(*args, **kwargs)
 
@@ -153,8 +155,8 @@ def main(unused_argv):
     rays = dataset.generate_ray_batch(idx).rays
     train_frac = 1.
     rendering = models.render_image(
-        functools.partial(render_eval_pfn, state.params, train_frac),
-        rays, None, config)
+        functools.partial(render_eval_pfn, state.params, train_frac), rays,
+        None, config)
     print(f'Rendered in {(time.time() - eval_start_time):0.3f}s')
 
     if jax.host_id() != 0:  # Only record via host 0.
@@ -162,20 +164,17 @@ def main(unused_argv):
 
     rendering['rgb'] = postprocess_fn(rendering['rgb'])
 
-    save_fn(
-        utils.save_img_u8, rendering['rgb'], path_fn(f'color_{idx_str}.png'))
+    save_fn(utils.save_img_u8, rendering['rgb'],
+            path_fn(f'color_{idx_str}.png'))
     if 'normals' in rendering:
-      save_fn(
-          utils.save_img_u8, rendering['normals'] / 2. + 0.5,
-          path_fn(f'normals_{idx_str}.png'))
-    save_fn(
-        utils.save_img_f32, rendering['distance_mean'],
-        path_fn(f'distance_mean_{idx_str}.tiff'))
-    save_fn(
-        utils.save_img_f32, rendering['distance_median'],
-        path_fn(f'distance_median_{idx_str}.tiff'))
-    save_fn(
-        utils.save_img_f32, rendering['acc'], path_fn(f'acc_{idx_str}.tiff'))
+      save_fn(utils.save_img_u8, rendering['normals'] / 2. + 0.5,
+              path_fn(f'normals_{idx_str}.png'))
+    save_fn(utils.save_img_f32, rendering['distance_mean'],
+            path_fn(f'distance_mean_{idx_str}.tiff'))
+    save_fn(utils.save_img_f32, rendering['distance_median'],
+            path_fn(f'distance_median_{idx_str}.tiff'))
+    save_fn(utils.save_img_f32, rendering['acc'],
+            path_fn(f'acc_{idx_str}.tiff'))
 
   if config.render_save_async:
     # Wait until all worker threads finish.
