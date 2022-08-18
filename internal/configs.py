@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Utility functions for handling configurations."""
 
 import dataclasses
@@ -58,6 +57,7 @@ class Config:
   llffhold: int = 8  # Use every Nth image for the test set. Used only by LLFF.
   # If true, use all input images for training.
   llff_use_all_images_for_training: bool = False
+  render_dolly_zoom: bool = False  # If true, and forward facing, renders a dolly zoom.
   use_tiffs: bool = False  # If True, use 32-bit TIFFs. Used only by Blender.
   compute_disp_metrics: bool = False  # If True, load and compute disparity MSE.
   compute_normal_metrics: bool = False  # If True, load and compute normal MAE.
@@ -175,8 +175,9 @@ def define_common_flags():
 
 def load_config(save_config=True):
   """Load the config, and optionally checkpoint it."""
-  gin.parse_config_files_and_bindings(
-      flags.FLAGS.gin_configs, flags.FLAGS.gin_bindings, skip_unknown=True)
+  gin.parse_config_files_and_bindings(flags.FLAGS.gin_configs,
+                                      flags.FLAGS.gin_bindings,
+                                      skip_unknown=True)
   config = Config()
   if save_config and jax.host_id() == 0:
     utils.makedirs(config.checkpoint_dir)

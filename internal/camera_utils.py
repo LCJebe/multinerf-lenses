@@ -187,6 +187,43 @@ def generate_spiral_path(poses: np.ndarray,
   return render_poses
 
 
+def generate_dolly_zoom(
+    poses: np.ndarray,
+    pixtocam: np.ndarray,
+    object_distance: np.ndarray = 1,
+    n_frames: int = 120,
+    zoom_factor: float = 4.0) -> Tuple[np.ndarray, np.ndarray]:
+  """Calculates a forward facing dolly zoom path for rendering."""
+  # Get average pose.
+  cam2world = average_pose(poses)
+  # Dolly zoom will be up to zoom_factor times the "focal" distance.
+  render_poses = []
+  pixtocams = []
+  for z_position in np.logspace(0,
+                                np.log2(object_distance * zoom_factor),
+                                n_frames,
+                                base=2):
+    # New pose is the average camera, but moving backwards along that camera's
+    # z axis.
+    z_shift = z_position - 1.0
+    z_direction = cam2world[:3, 2]
+    render_pose = cam2world.copy()
+    render_pose[:3, 3] += z_direction * z_shift
+    render_poses.append(render_pose)
+
+    # New intrinsic matrix with new focal length.
+    focal_factor = (object_distance + z_shift) / object_distance
+    new_camtopix = np.linalg.inv(pixtocam)
+    new_camtopix[0, 0] *= focal_factor
+    new_camtopix[1, 1] *= focal_factor
+    pixtocams.append(np.linalg.inv(new_camtopix))
+
+  render_poses = np.stack(render_poses, axis=0)
+  pixtocams = np.stack(pixtocams, axis=0)
+
+  return render_poses, pixtocams
+
+
 def transform_poses_pca(poses: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
   """Transforms poses so principal components lie on XYZ axes.
   Args:
@@ -624,6 +661,9 @@ def pixels_to_rays(
     origins_dx, _ = convert_to_ndc(origins, dx, pixtocam_ndc)
     origins_dy, _ = convert_to_ndc(origins, dy, pixtocam_ndc)
     origins, directions = convert_to_ndc(origins, directions, pixtocam_ndc)
+    # origins_dx, _ = convert_to_ndcs(origins, dx, pixtocams)
+    # origins_dy, _ = convert_to_ndcs(origins, dy, pixtocams)
+    # origins, directions = convert_to_ndcs(origins, directions, pixtocams)
 
     # In NDC space, we use the offset between origins instead of directions.
     dx_norm = xnp.linalg.norm(origins_dx - origins, axis=-1)
@@ -673,6 +713,7 @@ def cast_ray_batch(cameras: Tuple[_Array, ...],
       batch_index(camtoworlds),
       distortion_params=distortion_params,
       pixtocam_ndc=pixtocam_ndc,
+      #pixtocam_ndc=batch_index(pixtocams),
       camtype=camtype,
       xnp=xnp)
 

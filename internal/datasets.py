@@ -310,8 +310,10 @@ class Dataset(threading.Thread, metaclass=abc.ABCMeta):
           self.camtype = camera_utils.ProjectionType(config.render_camtype)
 
       self.distortion_params = None
-      self.pixtocams = camera_utils.get_pixtocam(self.focal, self.width,
-                                                 self.height)
+      if not config.render_dolly_zoom:
+        # If dolly zoom, use the provided pixtocams!
+        self.pixtocams = camera_utils.get_pixtocam(self.focal, self.width,
+                                                   self.height)
 
     self._n_examples = self.camtoworlds.shape[0]
 
@@ -671,9 +673,20 @@ class LLFF(Dataset):
       poses, transform = camera_utils.recenter_poses(poses)
       self.colmap_to_world_transform = (
           transform @ self.colmap_to_world_transform)
-      # Forward-facing spiral render path.
-      self.render_poses = camera_utils.generate_spiral_path(
-          poses, bounds, n_frames=config.render_path_frames)
+      # Forward-facing dolly zoom.
+      OBJECT_DISTANCE = 5
+      if config.render_dolly_zoom:
+        self.render_poses, self.pixtocams = camera_utils.generate_dolly_zoom(
+            poses,
+            self.pixtocam_ndc,
+            OBJECT_DISTANCE,
+            n_frames=config.render_path_frames,
+            zoom_factor=20.)
+      else:
+        # Forward-facing spiral render path.
+        self.render_poses = camera_utils.generate_spiral_path(
+            poses, bounds, n_frames=config.render_path_frames)
+
     else:
       # Rotate/scale poses to align ground with xy plane and fit to unit cube.
       poses, transform = camera_utils.transform_poses_pca(poses)
