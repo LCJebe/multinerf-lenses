@@ -984,16 +984,32 @@ class NextCamBundle(Dataset):
       confidences.append(conf)
 
     camtoworlds = np.stack(camtoworlds)
+    depths = np.stack(depths)
 
     # Normalize poses.
     scale = 1. / np.max((np.max(camtoworlds[:, :3, 3], axis=0) -
                          np.min(camtoworlds[:, :3, 3], axis=0)))
     camtoworlds[:, :3, 3] *= scale
     # Recenter poses.
-    camtoworlds, transform = camera_utils.recenter_poses(camtoworlds)
+    camtoworlds, _ = camera_utils.recenter_poses(camtoworlds)
 
     # Set NDC transform (needed for inference).
     self.pixtocam_ndc = pixtocams[0]
+
+    if config.render_path:
+      # Get estimate of object distance.
+      cy = depths.shape[2] // 2
+      cx = depths.shape[1] // 2
+      object_distance = np.median(depths[:, (cy - 10):(cy + 10),
+                                         (cx - 10):(cx + 10)])
+      object_distance *= scale  # Account for world space scale.
+
+      self.render_poses, pixtocams = camera_utils.generate_dolly_zoom(
+          camtoworlds,
+          self.pixtocam_ndc,
+          object_distance,
+          n_frames=config.render_path_frames,
+          zoom_factor=20.)
 
     # Define test / train split.
     all_indices = np.arange(len(images))
@@ -1009,19 +1025,14 @@ class NextCamBundle(Dataset):
     }
     indices = split_indices[self.split]
 
-    # Render spiral path. (Set bounds to [1, 10] heuristically).
-    # We could use the depth information too, but it isn't needed.
-    self.render_poses = camera_utils.generate_spiral_path(
-        camtoworlds, np.array([1, 10]), n_frames=config.render_path_frames)
-
-    self.pixtocams = np.stack(pixtocams)[indices]
+    self.pixtocams = pixtocams if config.render_path else np.stack(
+        pixtocams)[indices]
     self.images = np.stack(images)[indices]
     self.camtoworlds = self.render_poses if config.render_path else camtoworlds[
         indices]
     self.height, self.width = self.images.shape[1:3]
     self.focal = 1. / self.pixtocams[0, 0, 0]
 
-    # Debug
-    self.depths = np.stack(depths)[indices]
+    # Just for debugging.
+    self.depths = depths[indices]
     self.confidences = np.stack(confidences)[indices]
-    self.debug_transform = transform

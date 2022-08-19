@@ -19,12 +19,16 @@ SCENE=grand_piano
 EXPERIMENT=nextcam
 DATA_DIR=/home/jebe/multinerf-lenses/data
 CHECKPOINT_DIR=/home/jebe/multinerf-lenses/results/"$EXPERIMENT"/"$SCENE"
+RENDER_DIR="${CHECKPOINT_DIR}/render/"
+
+rm -r $RENDER_DIR
 
 python -m render \
   --gin_configs=configs/nextcam.gin \
   --gin_bindings="Config.data_dir = '${DATA_DIR}/${SCENE}.npz'" \
   --gin_bindings="Config.checkpoint_dir = '${CHECKPOINT_DIR}'" \
   --gin_bindings="Config.render_path = True" \
+  --gin_bindings="Config.render_dolly_zoom = True" \
   --gin_bindings="Config.render_path_frames = 60" \
   --gin_bindings="Config.render_dir = '${CHECKPOINT_DIR}/render/'" \
   --gin_bindings="Config.render_video_fps = 15" \
