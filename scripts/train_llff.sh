@@ -16,7 +16,7 @@
 export CUDA_VISIBLE_DEVICES=0
 
 SCENE=fern
-EXPERIMENT=llff_4
+EXPERIMENT=llff_rotx
 DATA_DIR=/home/jebe/multinerf-lenses/data
 CHECKPOINT_DIR=/home/jebe/multinerf-lenses/results/"$EXPERIMENT"/"$SCENE"
 

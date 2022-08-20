@@ -1,10 +1,12 @@
 Config.dataset_loader = 'llff'
 Config.near = 0.
 Config.far = 1.
-Config.factor = 4  # 0, 4, 8
+Config.factor = 8  # 0, 4, 8
 Config.forward_facing = True
 Config.adam_eps = 1e-8
 Config.batch_size = 8192  # default: 16k
+
+Config.llff_use_all_images_for_training = False
 
 # Added
 Config.train_render_every = 1000

@@ -30,6 +30,7 @@ import numpy as np
 from PIL import Image
 
 from internal import camera_utils
+from internal import nextcam_utils
 from internal import configs
 from internal import image as lib_image
 from internal import raw_utils
@@ -939,62 +940,26 @@ class NextCamBundle(Dataset):
   def _load_renderings(self, config):
     """Load images from disk."""
 
-    bundle = np.load(self.data_dir, allow_pickle=True)
-    num_frames = bundle["num_frames"]
+    # Load data, potentially downsampled.
+    images, camtoworlds, pixtocams, depths, confidences = nextcam_utils.extract_data(
+        self.data_dir, config.factor)
 
-    # Extract poses, intrinsics, images.
-    images = []
-    camtoworlds = []
-    pixtocams = []
-    depths = []
-    confidences = []
-    for i in range(num_frames):
-      # Poses.
-      w2c = bundle[f"info_{i}"].item()["world_to_camera"]
-      camtoworlds.append(np.linalg.inv(w2c))
-
-      # Intrinsics.
-      # Swap x and y of principal point values in K.
-      K_local = bundle[f"info_{i}"].item()["intrinsics"]
-      camera_mat = K_local.copy()
-      camera_mat[0, 2] = K_local[1, 2]
-      camera_mat[1, 2] = K_local[0, 2]
-
-      if config.factor > 0:
-        # Scale camera matrix according to downsampling factor.
-        camera_mat = np.diag([1. / config.factor, 1. / config.factor, 1.
-                             ]).astype(np.float32) @ camera_mat
-
-      pixtocams.append(np.linalg.inv(camera_mat))
-
-      # Images.
-      image = (bundle[f"img_{i}"] / 255.).astype(np.float32)
-      if config.factor > 1:
-        image = lib_image.downsample(image, config.factor)
-      images.append(image)
-
-      depth = bundle[f"depth_{i}"]
-      depth = skimage.transform.resize(depth, image.shape[:2])
-      depths.append(depth)
-      conf = bundle[f"conf_{i}"]
-      conf = skimage.transform.resize(
-          conf,
-          image.shape[:2],
-      )
-      confidences.append(conf)
-
-    camtoworlds = np.stack(camtoworlds)
-    depths = np.stack(depths)
-
-    # Normalize poses.
-    scale = 1. / np.max((np.max(camtoworlds[:, :3, 3], axis=0) -
-                         np.min(camtoworlds[:, :3, 3], axis=0)))
-    camtoworlds[:, :3, 3] *= scale
     # Recenter poses.
     camtoworlds, _ = camera_utils.recenter_poses(camtoworlds)
 
-    # Set NDC transform (needed for inference).
+    # Set NDC transform.
     self.pixtocam_ndc = pixtocams[0]
+
+    # Do another round of scaling, this time so that the cloest object is at z=-1.
+    all_world_points = nextcam_utils.get_all_world_points(
+        pixtocams, camtoworlds, depths, confidences)
+
+    maximum_z = np.max(all_world_points[2, :])
+    assert maximum_z < 0.
+
+    scale = -1. / maximum_z
+    camtoworlds[:, :3, 3] *= scale
+    depths = depths * scale
 
     if config.render_path:
       # Get estimate of object distance.
@@ -1002,12 +967,11 @@ class NextCamBundle(Dataset):
       cx = depths.shape[1] // 2
       object_distance = np.median(depths[:, (cy - 10):(cy + 10),
                                          (cx - 10):(cx + 10)])
-      object_distance *= scale  # Account for world space scale.
 
       self.render_poses, pixtocams = camera_utils.generate_dolly_zoom(
           camtoworlds,
           self.pixtocam_ndc,
-          object_distance,
+          object_distance * 0.9,
           n_frames=config.render_path_frames,
           zoom_factor=20.)
 
@@ -1025,14 +989,12 @@ class NextCamBundle(Dataset):
     }
     indices = split_indices[self.split]
 
-    self.pixtocams = pixtocams if config.render_path else np.stack(
-        pixtocams)[indices]
-    self.images = np.stack(images)[indices]
+    self.pixtocams = pixtocams if config.render_path else pixtocams[indices]
+    self.images = images[indices]
     self.camtoworlds = self.render_poses if config.render_path else camtoworlds[
         indices]
     self.height, self.width = self.images.shape[1:3]
     self.focal = 1. / self.pixtocams[0, 0, 0]
 
-    # Just for debugging.
     self.depths = depths[indices]
-    self.confidences = np.stack(confidences)[indices]
+    self.confidences = confidences[indices]
