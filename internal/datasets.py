@@ -971,7 +971,7 @@ class NextCamBundle(Dataset):
       self.render_poses, pixtocams = camera_utils.generate_dolly_zoom(
           camtoworlds,
           self.pixtocam_ndc,
-          object_distance * 0.9,
+          object_distance * 0.5,
           n_frames=config.render_path_frames,
           zoom_factor=20.)
 

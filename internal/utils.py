@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Utility functions."""
 
 import enum
@@ -66,17 +65,16 @@ def dummy_rays(include_exposure_idx: bool = False,
     exposure_kwargs['exposure_idx'] = data_fn(1).astype(jnp.int32)
   if include_exposure_values:
     exposure_kwargs['exposure_values'] = data_fn(1)
-  return Rays(
-      origins=data_fn(3),
-      directions=data_fn(3),
-      viewdirs=data_fn(3),
-      radii=data_fn(1),
-      imageplane=data_fn(2),
-      lossmult=data_fn(1),
-      near=data_fn(1),
-      far=data_fn(1),
-      cam_idx=data_fn(1).astype(jnp.int32),
-      **exposure_kwargs)
+  return Rays(origins=data_fn(3),
+              directions=data_fn(3),
+              viewdirs=data_fn(3),
+              radii=data_fn(1),
+              imageplane=data_fn(2),
+              lossmult=data_fn(1),
+              near=data_fn(1),
+              far=data_fn(1),
+              cam_idx=data_fn(1).astype(jnp.int32),
+              **exposure_kwargs)
 
 
 @flax.struct.dataclass

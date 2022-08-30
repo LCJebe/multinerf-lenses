@@ -15,8 +15,8 @@
 
 export CUDA_VISIBLE_DEVICES=0
 
-SCENE=fern
-EXPERIMENT=llff_rotx
+SCENE=pink_flower
+EXPERIMENT=nextcam_2_colmap
 DATA_DIR=/home/jebe/multinerf-lenses/data
 CHECKPOINT_DIR=/home/jebe/multinerf-lenses/results/"$EXPERIMENT"/"$SCENE"
 

@@ -15,7 +15,7 @@
 
 export CUDA_VISIBLE_DEVICES=0
 
-SCENE=fake_flower
+SCENE=multi3
 EXPERIMENT=nextcam_2
 DATA_DIR=/home/jebe/multinerf-lenses/data
 CHECKPOINT_DIR=/home/jebe/multinerf-lenses/results/"$EXPERIMENT"/"$SCENE"
@@ -29,6 +29,7 @@ python -m render \
   --gin_bindings="Config.checkpoint_dir = '${CHECKPOINT_DIR}'" \
   --gin_bindings="Config.render_path = True" \
   --gin_bindings="Config.render_dolly_zoom = True" \
+  --gin_bindings="Config.clip_viewdirs = True" \
   --gin_bindings="Config.render_path_frames = 60" \
   --gin_bindings="Config.render_dir = '${CHECKPOINT_DIR}/render/'" \
   --gin_bindings="Config.render_video_fps = 15" \

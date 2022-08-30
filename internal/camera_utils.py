@@ -97,6 +97,28 @@ def convert_to_ndc(origins: _Array,
   return origins_ndc, directions_ndc
 
 
+def convert_from_ndc(points_ndc,
+                     pixtocam,
+                     near: float = 1.,
+                     xnp: types.ModuleType = np):
+  """Converts 3D points from NDC to world coordinates."""
+  # Get coords in ndc space.
+  x, y, z = xnp.moveaxis(points_ndc, -1, 0)
+
+  # Apply inverse ndc transform to convert points to world space.
+  wz = (2. * near) / (z - 1.)
+
+  xmult = pixtocam[0, 2]  # Equal to cx / (-2. * focal)
+  ymult = pixtocam[1, 2]  # Equal to cy / (-2. * focal)
+
+  wx = x * wz * xmult
+  wy = y * wz * ymult
+
+  points_world = xnp.stack([wx, wy, wz], axis=-1)
+
+  return points_world
+
+
 def pad_poses(p: np.ndarray) -> np.ndarray:
   """Pad [..., 3, 4] pose matrices with a homogeneous bottom row [0,0,0,1]."""
   bottom = np.broadcast_to([0, 0, 0, 1.], p[..., :1, :4].shape)
@@ -661,9 +683,6 @@ def pixels_to_rays(
     origins_dx, _ = convert_to_ndc(origins, dx, pixtocam_ndc)
     origins_dy, _ = convert_to_ndc(origins, dy, pixtocam_ndc)
     origins, directions = convert_to_ndc(origins, directions, pixtocam_ndc)
-    # origins_dx, _ = convert_to_ndcs(origins, dx, pixtocams)
-    # origins_dy, _ = convert_to_ndcs(origins, dy, pixtocams)
-    # origins, directions = convert_to_ndcs(origins, directions, pixtocams)
 
     # In NDC space, we use the offset between origins instead of directions.
     dx_norm = xnp.linalg.norm(origins_dx - origins, axis=-1)
@@ -679,6 +698,7 @@ def pixels_to_rays(
 def cast_ray_batch(cameras: Tuple[_Array, ...],
                    pixels: utils.Pixels,
                    camtype: ProjectionType = ProjectionType.PERSPECTIVE,
+                   src_cams=None,
                    xnp: types.ModuleType = np) -> utils.Rays:
   """Maps from input cameras and Pixel batch to output Ray batch.
 
@@ -694,6 +714,8 @@ def cast_ray_batch(cameras: Tuple[_Array, ...],
     pixels: integer pixel coordinates and camera indices, plus ray metadata.
       These fields can be an arbitrary batch shape.
     camtype: camera_utils.ProjectionType, fisheye or perspective camera.
+    src_cams: The camtoworlds of the source cameras. If not None, they are used
+      for clipping the view directions during inference.
     xnp: either numpy or jax.numpy.
 
   Returns:
@@ -713,9 +735,15 @@ def cast_ray_batch(cameras: Tuple[_Array, ...],
       batch_index(camtoworlds),
       distortion_params=distortion_params,
       pixtocam_ndc=pixtocam_ndc,
-      #pixtocam_ndc=batch_index(pixtocams),
       camtype=camtype,
       xnp=xnp)
+
+  # Clip view directions.
+  # ELEPHANT: This is not the right place to do this.
+  # Need to clip viewdirs individually for every point along a ray.
+  if src_cams is not None:
+    print("Debug: Trying to clip view dirs, but it's not implemented!")
+    print("Leaving viewdirs unchanged instead.")
 
   # Create Rays data structure.
   return utils.Rays(

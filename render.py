@@ -154,9 +154,17 @@ def main(unused_argv):
     eval_start_time = time.time()
     rays = dataset.generate_ray_batch(idx).rays
     train_frac = 1.
+
+    # Set pixtocam for clipping viewdirs.
+    if config.clip_viewdirs:
+      print("Clipping viewdirs to point to world origin.")
+      pixtocam_ndc = dataset.pixtocam_ndc
+    else:
+      print("Leaving viewdirs untouched.")
+      pixtocam_ndc = None
     rendering = models.render_image(
-        functools.partial(render_eval_pfn, state.params, train_frac), rays,
-        None, config)
+        functools.partial(render_eval_pfn, state.params, train_frac,
+                          pixtocam_ndc), rays, None, config)
     print(f'Rendered in {(time.time() - eval_start_time):0.3f}s')
 
     if jax.host_id() != 0:  # Only record via host 0.

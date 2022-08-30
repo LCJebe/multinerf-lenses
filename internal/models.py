@@ -27,6 +27,7 @@ from internal import ref_utils
 from internal import render
 from internal import stepfun
 from internal import utils
+from internal import camera_utils
 import jax
 from jax import random
 import jax.numpy as jnp
@@ -78,6 +79,7 @@ class Model(nn.Module):
       train_frac,
       compute_extras,
       zero_glo=True,
+      pixtocam_ndc=None,
   ):
     """The mip-NeRF Model.
 
@@ -209,6 +211,14 @@ class Model(nn.Module):
                                    self.ray_shape,
                                    diag=False)
 
+      if pixtocam_ndc is not None:
+        # Clip viewdirs to point to world origin.
+        viewdirs = camera_utils.convert_from_ndc(gaussians[0], pixtocam_ndc, 1.,
+                                                 jnp)
+        viewdirs = viewdirs / jnp.linalg.norm(viewdirs, axis=-1, keepdims=True)
+      else:
+        viewdirs = rays.viewdirs
+
       if self.disable_integration:
         # Setting the covariance of our Gaussian samples to 0 disables the
         # "integrated" part of integrated positional encoding.
@@ -220,7 +230,7 @@ class Model(nn.Module):
       ray_results = mlp(
           key,
           gaussians,
-          viewdirs=rays.viewdirs if self.use_viewdirs else None,
+          viewdirs=viewdirs if self.use_viewdirs else None,
           imageplane=rays.imageplane,
           glo_vec=None if is_prop else glo_vec,
           exposure=rays.exposure_values,
@@ -550,9 +560,10 @@ class MLP(nn.Module):
           # Encode view directions.
           dir_enc = self.dir_enc_fn(viewdirs, roughness)
 
-          dir_enc = jnp.broadcast_to(
-              dir_enc[..., None, :],
-              bottleneck.shape[:-1] + (dir_enc.shape[-1],))
+          if dir_enc.ndim < bottleneck.ndim:
+            dir_enc = jnp.broadcast_to(
+                dir_enc[..., None, :],
+                bottleneck.shape[:-1] + (dir_enc.shape[-1],))
 
         # Append view (or reflection) direction encoding to bottleneck vector.
         x.append(dir_enc)

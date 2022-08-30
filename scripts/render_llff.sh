@@ -29,6 +29,7 @@ python -m render \
   --gin_bindings="Config.checkpoint_dir = '${CHECKPOINT_DIR}'" \
   --gin_bindings="Config.render_path = True" \
   --gin_bindings="Config.render_dolly_zoom = True" \
+  --gin_bindings="Config.clip_viewdirs = False" \
   --gin_bindings="Config.render_path_frames = 120" \
   --gin_bindings="Config.render_dir = '${CHECKPOINT_DIR}/render/'" \
   --gin_bindings="Config.render_video_fps = 30" \

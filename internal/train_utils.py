@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """Training step and model creation functions."""
 
 import collections
@@ -123,9 +122,8 @@ def compute_data_loss(batch, renderings, rays, config):
       stats['normal_maes'].append(normal_mae)
 
   data_losses = jnp.array(data_losses)
-  loss = (
-      config.data_coarse_loss_mult * jnp.sum(data_losses[:-1]) +
-      config.data_loss_mult * data_losses[-1])
+  loss = (config.data_coarse_loss_mult * jnp.sum(data_losses[:-1]) +
+          config.data_loss_mult * data_losses[-1])
   stats = {k: jnp.array(stats[k]) for k in stats}
   return loss, stats
 
@@ -260,16 +258,15 @@ def create_train_step(model: models.Model,
         rays = camera_utils.cast_ray_batch(cameras, rays, camtype, xnp=jnp)
 
       # Indicates whether we need to compute output normal or depth maps in 2D.
-      compute_extras = (
-          config.compute_disp_metrics or config.compute_normal_metrics)
+      compute_extras = (config.compute_disp_metrics or
+                        config.compute_normal_metrics)
 
-      renderings, ray_history = model.apply(
-          variables,
-          key if config.randomized else None,
-          rays,
-          train_frac=train_frac,
-          compute_extras=compute_extras,
-          zero_glo=False)
+      renderings, ray_history = model.apply(variables,
+                                            key if config.randomized else None,
+                                            rays,
+                                            train_frac=train_frac,
+                                            compute_extras=compute_extras,
+                                            zero_glo=False)
 
       losses = {}
 
@@ -329,11 +326,10 @@ def create_train_step(model: models.Model,
     stats['psnr'] = stats['psnrs'][-1]
     return new_state, stats, rng
 
-  train_pstep = jax.pmap(
-      train_step,
-      axis_name='batch',
-      in_axes=(0, 0, 0, None, None),
-      donate_argnums=(0, 1))
+  train_pstep = jax.pmap(train_step,
+                         axis_name='batch',
+                         in_axes=(0, 0, 0, None, None),
+                         donate_argnums=(0, 1))
   return train_pstep
 
 
@@ -353,11 +349,10 @@ def create_optimizer(
   }
 
   def get_lr_fn(lr_init, lr_final):
-    return functools.partial(
-        math.learning_rate_decay,
-        lr_init=lr_init,
-        lr_final=lr_final,
-        **lr_kwargs)
+    return functools.partial(math.learning_rate_decay,
+                             lr_init=lr_init,
+                             lr_final=lr_final,
+                             **lr_kwargs)
 
   lr_fn_main = get_lr_fn(config.lr_init, config.lr_final)
   tx = optax.adam(learning_rate=lr_fn_main, **adam_kwargs)
@@ -368,20 +363,22 @@ def create_optimizer(
 def create_render_fn(model: models.Model):
   """Creates pmap'ed function for full image rendering."""
 
-  def render_eval_fn(variables, train_frac, _, rays):
+  def render_eval_fn(variables, train_frac, pixtocam_ndc, _, rays):
     return jax.lax.all_gather(
         model.apply(
             variables,
             None,  # Deterministic.
             rays,
             train_frac=train_frac,
-            compute_extras=True),
+            pixtocam_ndc=pixtocam_ndc,
+            compute_extras=True,
+        ),
         axis_name='batch')
 
   # pmap over only the data input.
   render_eval_pfn = jax.pmap(
       render_eval_fn,
-      in_axes=(None, None, None, 0),
+      in_axes=(None, None, None, None, 0),
       axis_name='batch',
   )
   return render_eval_pfn
@@ -398,8 +395,8 @@ def setup_model(
         Tuple[TrainState, Dict[Text, Any], jnp.array]], Callable[[int], float]]:
   """Creates NeRF model, optimizer, and pmap-ed train/render functions."""
 
-  dummy_rays = utils.dummy_rays(
-      include_exposure_idx=config.rawnerf_mode, include_exposure_values=True)
+  dummy_rays = utils.dummy_rays(include_exposure_idx=config.rawnerf_mode,
+                                include_exposure_values=True)
   model, variables = models.construct_model(rng, dummy_rays, config)
 
   state, lr_fn = create_optimizer(config, variables)

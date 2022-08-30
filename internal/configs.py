@@ -58,6 +58,7 @@ class Config:
   # If true, use all input images for training.
   llff_use_all_images_for_training: bool = False
   render_dolly_zoom: bool = False  # If true, and forward facing, renders a dolly zoom.
+  clip_viewdirs: bool = False  # If true, clip view directions.
   use_tiffs: bool = False  # If True, use 32-bit TIFFs. Used only by Blender.
   compute_disp_metrics: bool = False  # If True, load and compute disparity MSE.
   compute_normal_metrics: bool = False  # If True, load and compute normal MAE.
